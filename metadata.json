@@ -1,0 +1,6 @@
+{
+  "name": "Habit Tracker",
+  "description": "Aplikasi pelacak kebiasaan harian (Habit Tracker) dengan pembaharuan kegiatan harian real-time dan pemantauan api streak konsistensi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
