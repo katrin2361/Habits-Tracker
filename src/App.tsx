@@ -283,7 +283,6 @@ export default function App() {
           <DetailView
             habit={activeSelectedHabit}
             onBack={() => setCurrentTab('hari-ini')}
-            onToggleHabit={handleToggleHabit}
             onDeleteHabit={handleDeleteHabit}
             onUpdateHabit={handleUpdateHabit}
           />

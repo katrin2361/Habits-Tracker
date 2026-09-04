@@ -85,6 +85,11 @@ export function getDynamicInitialHabits(): Habit[] {
       completionRate: 93,
       totalCompletedDays: Object.values(h1History).filter(Boolean).length,
       notes: 'Membawa tumbler 1L ke kantor, minum habis jam 15:00',
+      dailyNotes: {
+        [todayISO]: 'Membawa tumbler 1L ke kantor, minum habis jam 15:00',
+        [getShiftedDateISO(todayISO, -1)]: 'Mencapai target 2 liter sebelum maghrib, badan terasa lebih bugar',
+        [getShiftedDateISO(todayISO, -2)]: 'Membagi 4 gelas pagi dan 4 gelas siang/sore',
+      },
       historyMap: h1History,
     },
     {
@@ -105,6 +110,10 @@ export function getDynamicInitialHabits(): Habit[] {
       reminderEnabled: true,
       completionRate: 85,
       totalCompletedDays: Object.values(h2History).filter(Boolean).length,
+      dailyNotes: {
+        [getShiftedDateISO(todayISO, -1)]: 'Membaca bab 4 tentang pembentukan kebiasaan kecil (atomic habits)',
+        [getShiftedDateISO(todayISO, -2)]: 'Membaca 12 halaman saat istirahat makan siang',
+      },
       historyMap: h2History,
     },
     {
@@ -126,6 +135,10 @@ export function getDynamicInitialHabits(): Habit[] {
       isUrgent: true,
       completionRate: 68,
       totalCompletedDays: Object.values(h3History).filter(Boolean).length,
+      dailyNotes: {
+        [getShiftedDateISO(todayISO, -1)]: 'Terlewat karena lembur pekerjaan kantor, perlu atur alarm lebih awal',
+        [getShiftedDateISO(todayISO, -2)]: 'Stretching leher dan punggung 10 menit setelah seharian di depan laptop',
+      },
       historyMap: h3History,
     },
     {
@@ -147,6 +160,10 @@ export function getDynamicInitialHabits(): Habit[] {
       reminderEnabled: true,
       completionRate: 100,
       totalCompletedDays: Object.values(h4History).filter(Boolean).length,
+      dailyNotes: {
+        [todayISO]: 'Bersyukur pekerjaan lancar dan dapat beristirahat dengan tenang',
+        [getShiftedDateISO(todayISO, -1)]: 'Pernapasan 4-7-8 selama 10 menit, tidur menjadi jauh lebih lelap',
+      },
       historyMap: h4History,
     },
   ];

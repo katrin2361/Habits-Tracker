@@ -1,35 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Habit } from '../types';
-import { triggerConfetti } from '../utils/confetti';
 import {
   formatIndonesianDate,
   formatIndonesianMonthYear,
   getTodayISO,
   calculateStreakInfo,
+  parseDateISO,
 } from '../utils/dateUtils';
 
 interface DetailViewProps {
   habit: Habit;
-  onBack: () => void;
-  onToggleHabit: (id: string, e: React.MouseEvent, dateISO?: string) => void;
-  onDeleteHabit: (id: string) => void;
+  onBack?: () => void;
+  onToggleHabit?: (id: string, e: React.MouseEvent, dateISO?: string) => void;
+  onDeleteHabit?: (id: string) => void;
   onUpdateHabit: (updatedHabit: Habit) => void;
 }
 
 export const DetailView: React.FC<DetailViewProps> = ({
   habit,
-  onBack,
-  onToggleHabit,
-  onDeleteHabit,
   onUpdateHabit,
 }) => {
-  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [noteText, setNoteText] = useState<string>(habit.notes || '');
+  const todayISO = getTodayISO();
+
+  // Selected date in the calendar for inspecting daily history and notes
+  const [selectedDateISO, setSelectedDateISO] = useState<string>(todayISO);
+  const [dailyNoteText, setDailyNoteText] = useState<string>(() => {
+    return habit.dailyNotes?.[todayISO] ?? habit.notes ?? '';
+  });
   const [noteSaved, setNoteSaved] = useState<boolean>(false);
-  const [notifEnabled, setNotifEnabled] = useState<boolean>(habit.reminderEnabled);
-  const [editTitle, setEditTitle] = useState<string>(habit.title);
-  const [editTime, setEditTime] = useState<string>(habit.time);
+
+  // Synchronize note text when habit changes or selected date changes
+  useEffect(() => {
+    const existing =
+      habit.dailyNotes?.[selectedDateISO] ?? (selectedDateISO === todayISO ? habit.notes ?? '' : '');
+    setDailyNoteText(existing);
+  }, [habit.id, selectedDateISO, todayISO]);
 
   // Month navigation
   const [calendarDate, setCalendarDate] = useState<Date>(() => {
@@ -38,7 +43,6 @@ export const DetailView: React.FC<DetailViewProps> = ({
     return d;
   });
 
-  const todayISO = getTodayISO();
   const isStreakActive = habit.streak > 0;
   const streakInfo = calculateStreakInfo(habit.historyMap || {}, todayISO);
 
@@ -58,36 +62,29 @@ export const DetailView: React.FC<DetailViewProps> = ({
     });
   };
 
-  const handleSaveNote = () => {
-    if (!noteText.trim()) return;
-    onUpdateHabit({
+  // When clicking a date in calendar: do NOT toggle checklist, just inspect that date & load its daily notes
+  const handleSelectDate = (dateISO: string) => {
+    setSelectedDateISO(dateISO);
+    const existingNote =
+      habit.dailyNotes?.[dateISO] ?? (dateISO === todayISO ? habit.notes ?? '' : '');
+    setDailyNoteText(existingNote);
+    setNoteSaved(false);
+  };
+
+  const handleSaveDailyNote = () => {
+    const trimmed = dailyNoteText.trim();
+    const updatedDailyNotes: Record<string, string> = {
+      ...(habit.dailyNotes || {}),
+      [selectedDateISO]: trimmed,
+    };
+    const updatedHabit: Habit = {
       ...habit,
-      notes: noteText.trim(),
-    });
+      dailyNotes: updatedDailyNotes,
+      notes: selectedDateISO === todayISO ? trimmed : habit.notes,
+    };
+    onUpdateHabit(updatedHabit);
     setNoteSaved(true);
-    setTimeout(() => setNoteSaved(false), 2000);
-  };
-
-  const handleSaveEdit = () => {
-    onUpdateHabit({
-      ...habit,
-      title: editTitle.trim() || habit.title,
-      time: editTime || habit.time,
-    });
-    setIsEditing(false);
-  };
-
-  const handleToggleDate = (dateISO: string, e: React.MouseEvent) => {
-    if (dateISO > todayISO) return; // cannot toggle future
-    const currentlyDone = Boolean(habit.historyMap?.[dateISO]);
-    if (!currentlyDone) {
-      triggerConfetti(e.currentTarget as HTMLElement);
-    }
-    onToggleHabit(habit.id, e, dateISO);
-  };
-
-  const handleToggleToday = (e: React.MouseEvent) => {
-    handleToggleDate(todayISO, e);
+    setTimeout(() => setNoteSaved(false), 2500);
   };
 
   // Build calendar matrix for calendarDate
@@ -106,144 +103,15 @@ export const DetailView: React.FC<DetailViewProps> = ({
     }
   }
 
+  // Selected date info for the daily inspection panel
+  const selectedDateObj = parseDateISO(selectedDateISO);
+  const formattedSelectedDate = formatIndonesianDate(selectedDateObj, true);
+  const isSelectedToday = selectedDateISO === todayISO;
+  const isSelectedFuture = selectedDateISO > todayISO;
+  const isSelectedCompleted = Boolean(habit.historyMap && habit.historyMap[selectedDateISO]);
+
   return (
-    <div className="flex flex-col w-full pb-8 space-y-5 animate-in fade-in duration-300">
-      {/* Sub-Header / Navigasi Aksi */}
-      <div className="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Kembali ke Beranda"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e5eeff] text-[#0b1c30] hover:bg-[#dce9ff] transition-colors text-[12px] font-bold shadow-xs active:scale-95"
-        >
-          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          <span>Kembali</span>
-        </button>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsEditing(!isEditing)}
-            aria-label="Edit Kebiasaan"
-            title="Edit Kebiasaan"
-            className="w-9 h-9 rounded-full flex items-center justify-center bg-[#e5eeff] text-[#0b1c30] hover:bg-[#dce9ff] transition-colors active:scale-95 shadow-xs"
-          >
-            <span className="material-symbols-outlined text-[18px]">edit</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDeleteModal(true)}
-            aria-label="Hapus Kebiasaan"
-            title="Hapus Kebiasaan"
-            className="w-9 h-9 rounded-full flex items-center justify-center bg-[#ffdad6] text-[#ba1a1a] hover:bg-[#ffb4ab] transition-colors active:scale-95 shadow-xs"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Edit Mode Inline Drawer */}
-      {isEditing && (
-        <div className="p-4 rounded-xl bg-white border border-[#10b981] shadow-md flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-bold text-[#006c49]">Edit Nama & Jadwal</span>
-            <button
-              type="button"
-              onClick={() => setIsEditing(false)}
-              className="text-[#6c7a71] text-[12px]"
-            >
-              Batal
-            </button>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-[#6c7a71]">Nama Kebiasaan</label>
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-[14px] font-medium outline-none focus:border-[#006c49]"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col gap-1 flex-1">
-              <label className="text-[11px] font-bold text-[#6c7a71]">Waktu Pengingat</label>
-              <input
-                type="time"
-                value={editTime}
-                onChange={(e) => setEditTime(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-[14px] outline-none focus:border-[#006c49]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleSaveEdit}
-              className="self-end px-4 py-2 bg-[#006c49] text-white rounded-lg text-[12px] font-bold hover:bg-[#005236]"
-            >
-              Simpan
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Identitas Kebiasaan Card */}
-      <div className="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-xs border border-[#e5eeff]">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#eff4ff] text-[#006c49] flex items-center justify-center shadow-xs">
-              <span className="material-symbols-outlined text-[28px]">{habit.icon}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#e5eeff] text-[#006c49] w-fit">
-                {habit.category}
-              </span>
-              <h1 className="text-[20px] font-extrabold text-[#0b1c30] mt-0.5">
-                {habit.title}
-              </h1>
-            </div>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-[12px] font-bold text-[#006c49] bg-[#eff4ff] px-2.5 py-1 rounded-full border border-[#dce9ff]">
-              {habit.frequency}
-            </span>
-          </div>
-        </div>
-
-        <p className="text-[13px] text-[#3c4a42] leading-relaxed mt-1">
-          {habit.description}
-        </p>
-
-        {/* Quick Check-in CTA Button for Today */}
-        <div className="mt-1 pt-3 border-t border-[#e5eeff] bg-[#eff4ff]/60 rounded-xl p-3 flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-[#6c7a71] uppercase tracking-wider">
-              Status Hari Ini ({formatIndonesianDate(new Date(), false)})
-            </span>
-            <span
-              className={`text-[13px] font-extrabold ${
-                habit.completedToday ? 'text-[#006c49]' : 'text-[#6c7a71]'
-              }`}
-            >
-              {habit.completedToday
-                ? `Sudah Selesai (${habit.completedTime || 'Tercatat'})`
-                : 'Belum Dicentang'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleToggleToday}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold shadow-xs active:scale-95 transition-all ${
-              habit.completedToday
-                ? 'bg-[#006c49] text-white'
-                : 'bg-[#10b981] text-white hover:bg-[#006c49]'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">
-              {habit.completedToday ? 'check_circle' : 'radio_button_unchecked'}
-            </span>
-            <span>{habit.completedToday ? 'Tuntas' : 'Centang Hari Ini'}</span>
-          </button>
-        </div>
-      </div>
-
+    <div className="flex flex-col w-full pb-8 space-y-5 animate-in fade-in duration-300 pt-1">
       {/* Hero Streak Counter (Reflects Flame Status) */}
       <div
         className={`relative overflow-hidden rounded-2xl text-white shadow-lg p-5 transition-all ${
@@ -267,8 +135,9 @@ export const DetailView: React.FC<DetailViewProps> = ({
               </span>
               {isStreakActive ? 'Streak Berjalan' : 'Api Streak Padam'}
             </span>
-            <span className="text-[11px] font-bold text-[#ffdbca]">
-              {isStreakActive ? 'Momentum Terjaga' : 'Hari Kosong Terdeteksi'}
+            <span className="text-[12px] font-bold text-white/95 bg-black/25 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <span className="material-symbols-outlined text-[15px]">{habit.icon}</span>
+              <span>{habit.title}</span>
             </span>
           </div>
 
@@ -434,32 +303,36 @@ export const DetailView: React.FC<DetailViewProps> = ({
             const isToday = dateISO === todayISO;
             const isFuture = dateISO > todayISO;
             const isCompleted = Boolean(habit.historyMap && habit.historyMap[dateISO]);
+            const isSelected = dateISO === selectedDateISO;
+            const hasNote = Boolean(habit.dailyNotes?.[dateISO] || (dateISO === todayISO && habit.notes));
 
             return (
               <div
                 key={dateISO}
-                onClick={(e) => !isFuture && handleToggleDate(dateISO, e)}
+                onClick={() => handleSelectDate(dateISO)}
                 title={
                   isFuture
-                    ? `${dayNum}: Tanggal mendatang`
+                    ? `${dayNum}: Tanggal mendatang (Klik untuk lihat catatan)`
                     : isToday
                     ? `${dayNum}: Hari Ini (${isCompleted ? 'Selesai' : 'Belum selesai'})`
-                    : `${dayNum}: ${isCompleted ? 'Selesai' : 'Kosong / Terlewat'}`
+                    : `${dayNum}: ${isCompleted ? 'Selesai' : 'Kosong / Terlewat'}${hasNote ? ' • Ada catatan' : ''}`
                 }
-                className={`h-9 flex items-center justify-center select-none ${
-                  isFuture ? 'cursor-not-allowed text-[#6c7a71]/40' : 'cursor-pointer'
-                }`}
+                className="h-10 flex items-center justify-center select-none cursor-pointer"
               >
                 <span
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shadow-xs transition-transform active:scale-90 relative ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shadow-xs transition-all relative ${
+                    isSelected
+                      ? 'ring-2 ring-[#006c49] ring-offset-2 scale-110 z-10 font-black shadow-md'
+                      : 'hover:scale-105 active:scale-95'
+                  } ${
                     isToday
                       ? isCompleted
-                        ? 'bg-[#006c49] text-white ring-2 ring-[#10b981] font-black'
-                        : 'bg-[#10b981] text-white ring-2 ring-[#006c49] font-black'
+                        ? 'bg-[#006c49] text-white ring-1 ring-[#10b981]'
+                        : 'bg-[#10b981] text-white ring-1 ring-[#006c49]'
                       : isCompleted
                       ? 'bg-[#006c49] text-white'
                       : isFuture
-                      ? 'bg-[#eff4ff]/60 text-[#6c7a71]/40'
+                      ? 'bg-[#eff4ff]/60 text-[#6c7a71]/60'
                       : 'bg-[#e5eeff] text-[#6c7a71] hover:bg-[#dce9ff]'
                   }`}
                 >
@@ -467,14 +340,20 @@ export const DetailView: React.FC<DetailViewProps> = ({
                   {isToday && (
                     <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-[#fd761a]"></span>
                   )}
+                  {hasNote && (
+                    <span
+                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#fd761a] ring-2 ring-white"
+                      title="Ada catatan harian"
+                    ></span>
+                  )}
                 </span>
               </div>
             );
           })}
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-[#6c7a71] pt-2 border-t border-[#e5eeff]">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-[#6c7a71] pt-2 border-t border-[#e5eeff] gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-1">
               <span className="w-3 h-3 rounded-full bg-[#006c49]"></span> Selesai
             </span>
@@ -484,75 +363,171 @@ export const DetailView: React.FC<DetailViewProps> = ({
             <span className="flex items-center gap-1">
               <span className="w-3 h-3 rounded-full bg-[#10b981] ring-1 ring-[#006c49]"></span> Hari Ini
             </span>
-          </div>
-          <span className="font-semibold text-[#006c49]">Klik tanggal untuk ubah status</span>
-        </div>
-      </div>
-
-      {/* Catatan Refleksi & Komentar */}
-      <div className="rounded-xl bg-white p-4 shadow-xs border border-[#e5eeff] flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[18px] text-[#006c49]">edit_note</span>
-            <h2 className="text-[14px] font-bold text-[#0b1c30]">Catatan & Refleksi</h2>
-          </div>
-          {noteSaved && (
-            <span className="text-[11px] font-bold text-[#006c49] animate-fade-in">
-              ✓ Tersimpan
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#fd761a]"></span> Ada Catatan
             </span>
-          )}
+          </div>
+          <span className="font-semibold text-[#006c49] flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">touch_app</span>
+            <span>Klik tanggal untuk melihat riwayat & catatan</span>
+          </span>
         </div>
-        <textarea
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          placeholder="Tulis refleksi harian atau catatan strategi konsistensimu..."
-          rows={3}
-          className="w-full text-[13px] text-[#0b1c30] p-3 rounded-lg border border-[#e5eeff] bg-[#eff4ff]/40 focus:bg-white focus:border-[#006c49] outline-none resize-none"
-        />
-        <button
-          type="button"
-          onClick={handleSaveNote}
-          className="self-end px-3 py-1.5 bg-[#006c49] text-white rounded-lg text-[12px] font-bold hover:bg-[#005236] transition-colors shadow-xs active:scale-95"
-        >
-          Simpan Catatan
-        </button>
       </div>
 
-      {/* Modal Konfirmasi Hapus Kebiasaan */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl flex flex-col gap-3 border border-[#e5eeff]">
-            <div className="w-12 h-12 rounded-full bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center">
-              <span className="material-symbols-outlined text-[28px]">warning</span>
+      {/* Panel Riwayat & Catatan Harian Berdasarkan Tanggal Terpilih */}
+      <div className="rounded-2xl bg-white p-5 shadow-xs border border-[#e5eeff] flex flex-col gap-4">
+        {/* Header Tanggal Terpilih */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[#006c49]/10 text-[#006c49] flex items-center justify-center shrink-0 shadow-2xs">
+              <span className="material-symbols-outlined text-[22px]">calendar_month</span>
             </div>
-            <div className="flex flex-col gap-1">
-              <h3 className="text-[18px] font-bold text-[#0b1c30]">Hapus Kebiasaan?</h3>
-              <p className="text-[13px] text-[#6c7a71]">
-                Apakah Anda yakin ingin menghapus "<strong>{habit.title}</strong>"? Seluruh catatan riwayat dan streak akan dihapus permanen.
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-[15px] font-extrabold text-[#0b1c30]">
+                  Riwayat Tanggal: {formattedSelectedDate}
+                </h2>
+                {isSelectedToday ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#10b981]/20 text-[#006c49]">
+                    Hari Ini
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eff4ff] text-[#005ac2]">
+                    Tanggal Terpilih
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[#6c7a71] mt-0.5">
+                Informasi riwayat harian dan catatan refleksi khusus untuk tanggal ini
               </p>
             </div>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#3c4a42] hover:bg-[#eff4ff]"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  onDeleteHabit(habit.id);
-                }}
-                className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#ba1a1a] text-white hover:bg-[#93000a] shadow-xs"
-              >
-                Ya, Hapus
-              </button>
-            </div>
+          </div>
+
+          {!isSelectedToday && (
+            <button
+              type="button"
+              onClick={() => handleSelectDate(todayISO)}
+              className="text-[11px] font-bold text-[#006c49] bg-[#eff4ff] hover:bg-[#dce9ff] px-3 py-1.5 rounded-full border border-[#dce9ff] transition-all flex items-center gap-1 shrink-0 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[14px]">today</span>
+              <span>Lihat Hari Ini</span>
+            </button>
+          )}
+        </div>
+
+        {/* Status Card untuk Tanggal Terpilih */}
+        <div
+          className={`p-3.5 rounded-2xl border flex items-center gap-3.5 transition-all ${
+            isSelectedCompleted
+              ? 'bg-[#006c49]/10 border-[#006c49]/20'
+              : isSelectedFuture
+              ? 'bg-[#eff4ff]/60 border-[#dce9ff]'
+              : isSelectedToday
+              ? 'bg-[#eff4ff] border-[#bbd3ff]'
+              : 'bg-[#ffdad6]/60 border-[#ffdad6]'
+          }`}
+        >
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+              isSelectedCompleted
+                ? 'bg-[#006c49] text-white'
+                : isSelectedFuture
+                ? 'bg-[#6c7a71]/20 text-[#6c7a71]'
+                : isSelectedToday
+                ? 'bg-[#005ac2] text-white'
+                : 'bg-[#ba1a1a] text-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[22px]">
+              {isSelectedCompleted
+                ? 'check_circle'
+                : isSelectedFuture
+                ? 'event'
+                : isSelectedToday
+                ? 'schedule'
+                : 'mode_heat_off'}
+            </span>
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span
+              className={`text-[13px] font-extrabold ${
+                isSelectedCompleted
+                  ? 'text-[#006c49]'
+                  : isSelectedFuture
+                  ? 'text-[#6c7a71]'
+                  : isSelectedToday
+                  ? 'text-[#005ac2]'
+                  : 'text-[#ba1a1a]'
+              }`}
+            >
+              {isSelectedCompleted
+                ? 'Selesai Tuntas ✓'
+                : isSelectedFuture
+                ? 'Tanggal Mendatang'
+                : isSelectedToday
+                ? 'Belum Selesai Hari Ini'
+                : 'Kosong / Terlewat 💨'}
+            </span>
+            <span className="text-[11px] text-[#3c4a42] leading-snug">
+              {isSelectedCompleted
+                ? isSelectedToday && habit.completedTime
+                  ? `Kegiatan berhasil dituntaskan hari ini pukul ${habit.completedTime} WIB.`
+                  : 'Kegiatan ini tercatat telah diselesaikan dengan sukses pada tanggal ini.'
+                : isSelectedFuture
+                ? 'Tanggal ini belum berlangsung. Siapkan dirimu untuk menjaga konsistensi.'
+                : isSelectedToday
+                ? 'Kegiatan belum diceklis hari ini. Buka halaman utama "Hari Ini" untuk mencentang.'
+                : 'Kegiatan tidak diceklis pada tanggal ini (hari kosong).'}
+            </span>
           </div>
         </div>
-      )}
+
+        {/* Catatan Harian (Daily Notes) Editor */}
+        <div className="flex flex-col gap-2.5 pt-2 border-t border-[#e5eeff]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[19px] text-[#006c49]">edit_note</span>
+              <h3 className="text-[13px] font-bold text-[#0b1c30]">
+                Catatan Harian ({formatIndonesianDate(parseDateISO(selectedDateISO), false)})
+              </h3>
+            </div>
+            {noteSaved && (
+              <span className="text-[11px] font-bold text-[#006c49] animate-fade-in flex items-center gap-1 bg-[#10b981]/15 px-2.5 py-0.5 rounded-full">
+                <span className="material-symbols-outlined text-[13px]">check</span>
+                <span>Tersimpan!</span>
+              </span>
+            )}
+          </div>
+
+          <textarea
+            value={dailyNoteText}
+            onChange={(e) => {
+              setDailyNoteText(e.target.value);
+              setNoteSaved(false);
+            }}
+            placeholder={`Tulis catatan, refleksi, kendala, atau evaluasi harian untuk tanggal ${formatIndonesianDate(
+              parseDateISO(selectedDateISO),
+              false
+            )}...`}
+            rows={3}
+            className="w-full text-[13px] text-[#0b1c30] p-3.5 rounded-xl border border-[#e5eeff] bg-[#eff4ff]/30 focus:bg-white focus:border-[#006c49] outline-none resize-none transition-all placeholder:text-[#6c7a71]/60"
+          />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+            <span className="text-[11px] text-[#6c7a71]">
+              💡 Catatan ini terikat langsung pada tanggal ini dan tersimpan di riwayat kalender
+            </span>
+            <button
+              type="button"
+              onClick={handleSaveDailyNote}
+              className="self-end sm:self-auto px-4 py-2 bg-[#006c49] text-white rounded-xl text-[12px] font-bold hover:bg-[#005236] transition-all shadow-xs active:scale-95 flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">save</span>
+              <span>Simpan Catatan Tanggal Ini</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

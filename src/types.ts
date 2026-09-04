@@ -24,6 +24,7 @@ export interface Habit {
   activeDays: string[]; // ['S', 'S', 'R', 'K', 'J', 'S', 'M']
   reminderEnabled: boolean;
   notes?: string;
+  dailyNotes?: Record<string, string>; // date-keyed notes e.g. { '2026-09-03': 'Refleksi harian...' }
   completionRate: number; // percentage, e.g., 93
   totalCompletedDays: number; // e.g., 56
   isUrgent?: boolean;
